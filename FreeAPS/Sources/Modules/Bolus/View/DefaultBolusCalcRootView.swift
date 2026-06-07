@@ -9,7 +9,7 @@ extension Bolus {
         let waitForSuggestion: Bool
         let fetch: Bool
 
-        @StateObject var state = StateModel()
+        @EnvironmentObject var state: StateModel
 
         let meal: FetchedResults<Meals>
         let mealEntries: any View
@@ -49,6 +49,22 @@ extension Bolus {
             if state.units == .mmolL {
                 return 1
             } else { return 0 }
+        }
+
+        init(
+            resolver: Resolver,
+            waitForSuggestion: Bool,
+            fetch: Bool,
+//            state: StateModel,
+            meal: FetchedResults<Meals>,
+            mealEntries: any View
+        ) {
+            self.resolver = resolver
+            self.waitForSuggestion = waitForSuggestion
+            self.fetch = fetch
+//            self.state = state
+            self.meal = meal
+            self.mealEntries = mealEntries
         }
 
         var body: some View {
@@ -197,12 +213,11 @@ extension Bolus {
             .compactSectionSpacing()
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             .onAppear {
-                configureView {
-                    state.viewActive()
-                    state.waitForCarbs = fetch
-                    state.waitForSuggestionInitial = waitForSuggestion
-                    state.waitForSuggestion = waitForSuggestion
-                }
+                state.viewActive()
+                state.waitForCarbs = fetch
+                state.waitForSuggestionInitial = waitForSuggestion
+                state.waitForSuggestion = waitForSuggestion
+                state.start()
             }
             .navigationTitle("Enact Bolus")
             .navigationBarTitleDisplayMode(.inline)
@@ -228,8 +243,9 @@ extension Bolus {
             }
         }
 
-        var disabled: Bool {
-            state.amount <= 0 || state.amount > state.maxBolus
+        private var disabled: Bool {
+            state.amount <= 0 || state.amount > state.maxBolus || state.amount <
+                state.minBolus || state.amount < state.bolusIncrement
         }
 
         var predictionChart: some View {
@@ -320,8 +336,11 @@ extension Bolus {
                             if state.fraction != 1, state.insulin > 0 {
                                 Divider()
                                 HStack {
-                                    Text((entries.last?.variable ?? "") + " " + (entries.last?.value ?? "") + "  ->")
-                                        .foregroundStyle(.secondary)
+                                    if let recent = entries.last {
+                                        Text("\(recent.variable) \(recent.value)  ->")
+                                            .foregroundStyle(.secondary)
+                                    }
+
                                     Text(
                                         state.insulinCalculated.formatted() + unit
                                     ).fontWeight(fontWeight).font(.title3).foregroundStyle(.blue).bold()
